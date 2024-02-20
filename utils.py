@@ -106,12 +106,12 @@ def H(r):
 
 
 def H_inv_tensor(data):
+    if data.dim()==1:
+        data=data.unsqueeze(-1)
     if data.shape[-1]!=1:
         print("input is wrong")
         return
-    if data.dim()==1:
-        data=data.unsqueeze(-1)
-    loaded_model = torch.jit.load('H_inv.pth')
+    loaded_model = torch.jit.load('H_inv.pth',map_location=data.device)
     prediction = loaded_model(data).flatten()
     return prediction
 
