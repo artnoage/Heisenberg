@@ -1,6 +1,6 @@
 import torch
 from scipy.optimize import newton
-
+import numpy as np
 def spherical_to_cartesian(spherical_coords):
     """
     Convert spherical coordinates to Cartesian coordinates for higher-dimensional tensors.
@@ -20,13 +20,13 @@ def spherical_to_cartesian(spherical_coords):
     
     # Compute xi, eta, t for both cases (v != 0 and v == 0)
     xi = torch.where(v != 0, 
-                     (sin_theta * (1 - torch.cos(v * s)) + cos_theta * torch.sin(v * s)) / v * r, 
+                     ((sin_theta * (1 - torch.cos(v * s)) + cos_theta * torch.sin(v * s)) / v) * r, 
                      r * cos_theta * s)
     eta = torch.where(v != 0, 
-                      (-cos_theta * (1 - torch.cos(v * s)) + sin_theta * torch.sin(v * s)) / v * r, 
+                      ((-cos_theta * (1 - torch.cos(v * s)) + sin_theta * torch.sin(v * s)) / v )* r, 
                       r * sin_theta * s)
     t = torch.where(v != 0, 
-                    2 * (v * s - torch.sin(v * s)) / v**2 * r**2, 
+                    (2 * (v * s - torch.sin(v * s)) / v**2 )* r**2, 
                     torch.zeros_like(s))
     
     # Stack the computed values to create the Cartesian coordinates tensor
@@ -103,26 +103,50 @@ def dilation(l,x):
 def H(r):
     return (2 * torch.pi) * (r - torch.sin(2 * torch.pi * r)) / (1 - torch.cos(2 * torch.pi * r))
 
-def d_cc(xi, eta, t):
+
+
+def H_inv_tensor(data):
+    if data.shape()[-1]!=1:
+        print("input is wrong")
+        return
+    if data.dim()==1:
+        data=data.unsqueeze(-1)
+    loaded_model = torch.jit.load('H_inv.pth')
+    prediction = loaded_model(data).flatten()
+    return prediction
+
+
+def norm_cc(input):
+    xi=input[...,0]
+    eta=input[...,1]
+    t=input[...,2]
     zeta = torch.complex(xi, eta)  # Construct the complex number zeta
     abs_zeta_sq = torch.abs(zeta)**2
-    term1 = t * torch.sin(H_inv(t / abs_zeta_sq))
-    term2 = 1 / torch.abs(zeta)
-    term3 = torch.abs(zeta) * torch.cos(H_inv(t / abs_zeta_sq))
-    return term1 + term2 + term3
+    term1 = t * torch.sin(torch.pi * H_inv_tensor(t / abs_zeta_sq))
+    term2 = torch.abs(zeta) * torch.cos(H_inv_tensor(t / abs_zeta_sq))
+    return term1  + term2
 
-def H_inv(y, initial_guess=0.1, precision=1e-8):
-    func = lambda r: H(r) - y
-    
-    # The `tol` parameter allows control over the precision of the solution
-    r_inv = newton(func, initial_guess, tol=precision)
-    return r_inv
+def d_cc(input1,input2):
+    operated=op(-input2,input1)
+    return norm_cc(operated)
 
+def Kernel_unintegrated(input_tensor):
+    # Assuming the last dimension of the input_tensor is 5, in the order: tau, y, t, xi, eta
+    tau = input_tensor[..., 0]  # Extracts tau
+    y = input_tensor[..., 1]    # Extracts y
+    t = input_tensor[..., 2]    # Extracts t
+    xi = input_tensor[..., 3]   # Extracts xi
+    eta = input_tensor[..., 4]  # Extracts eta
 
-if __name__ == "__main__":
-    a=torch.tensor([1,1,1])
-    b=torch.tensor([[1,1,3],[1,2,3]])
-    l=2
+    # Compute the expression
+    part1 = (1 / (2 * torch.pi * tau)) ** 2
+    part2 = (2 * y) / torch.sinh(2 * y)
+    part3 = torch.cos((t * y) / tau)
+    part4 = torch.exp(-((xi ** 2 + eta ** 2) / (2 * tau)) * (2 * y) / torch.tanh(2 * y))
 
-    #a,b=match(a,b)
-    print (dilation(l,b))
+    result = part1 * part2 * part3 * part4
+
+    # Ensure the last dimension is 1 by summing or averaging if needed
+    # Here, the last dimension is already 1 due to the operations, so we can return the result directly
+    return result
+

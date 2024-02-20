@@ -2,41 +2,35 @@ import torch
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from utils import *
+import time
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Set a fixed value for v, theta, r
-v = torch.tensor(2.0)
-theta = torch.tensor(torch.pi / 4)  # 45 degrees in radians
-r = torch.tensor(1.0)  # r should be positive
+v = torch.tensor(0.6).to(device)
+theta = torch.tensor(torch.pi/8).to(device)  # 45 degrees in radians
+r = torch.tensor(1).to(device) # r should be positive
 
 # Randomly select 100 points for time (s)
-s_values = torch.rand(100) * 10  # 100 random points for s, scaled for a wider range
-
+s_values = torch.rand(1000).to(device)
+s_values= s_values/s_values.max()  # 100 random points for s, scaled for a wider range
 # Create a tensor of shape [100, 4] for spherical coordinates with the same v, theta, r
 spherical_coords = torch.stack((s_values, torch.full_like(s_values, v), 
                                 torch.full_like(s_values, theta), torch.full_like(s_values, r)), dim=1)
 
 # Convert to Cartesian coordinates
-cartesian_coords = spherical_to_cartesian_higher_dim(spherical_coords)
+if  False:
+    cartesian_coords = spherical_to_cartesian(spherical_coords)
+    norm=norm_cc(cartesian_coords)
+    s_values=0.8*s_values + 0.03
+    print(torch.max(torch.abs(norm-s_values)))
 
-# Extract x, y, z coordinates for plotting
-x = cartesian_coords[:, 0].numpy()
-y = cartesian_coords[:, 1].numpy()
-z = cartesian_coords[:, 2].numpy()
-
-# Create a 3D plot
-fig = plt.figure(figsize=(10, 8))
-ax = fig.add_subplot(111, projection='3d')
-
-# Scatter plot for the 3D points
-ax.scatter(x, y, z)
-
-# Set labels
-ax.set_xlabel('X Coordinate')
-ax.set_ylabel('Y Coordinate')
-ax.set_zlabel('Z Coordinate')
-
-# Set title
-ax.set_title('3D Scatter Plot of Cartesian Coordinates')
-
-# Show plot
-plt.show()
+if True:
+    s_values = torch.rand(1000).to(device)
+    s_values= 0.95*s_values/s_values.max()+0.005
+    values=H(s_values)
+    loaded_model = torch.jit.load('H_inv.pth')
+    prediction = loaded_model(values.unsqueeze(-1)).flatten()
+    prediction2= H_inv_tensor(values)
+    print(torch.max(torch.abs(prediction-prediction2)))
+    print(torch.max(torch.abs(prediction-s_values)))
+    print(torch.max(torch.abs(s_values-prediction2)))
