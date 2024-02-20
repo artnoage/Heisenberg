@@ -32,7 +32,7 @@ optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Example dataset
 s_values = torch.rand(10000).to(dtype=torch.float64).to(device)
-s_values= 0.999995*s_values/s_values.max()
+s_values= 2*0.9999999*s_values/s_values.max()-1 +0.0000001
 values=H(s_values)
 x_train = values.unsqueeze(-1)
 y_train = s_values.unsqueeze(-1)

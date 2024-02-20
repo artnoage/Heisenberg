@@ -6,7 +6,7 @@ import time
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Set a fixed value for v, theta, r
-v = torch.tensor(0.6).to(device)
+v = torch.tensor(5).to(device)
 theta = torch.tensor(torch.pi/8).to(device)  # 45 degrees in radians
 r = torch.tensor(1).to(device) # r should be positive
 
@@ -18,13 +18,12 @@ spherical_coords = torch.stack((s_values, torch.full_like(s_values, v),
                                 torch.full_like(s_values, theta), torch.full_like(s_values, r)), dim=1)
 
 # Convert to Cartesian coordinates
-if  False:
+if  True:
     cartesian_coords = spherical_to_cartesian(spherical_coords)
     norm=norm_cc(cartesian_coords)
-    s_values=0.8*s_values + 0.03
     print(torch.max(torch.abs(norm-s_values)))
 
-if True:
+if False:
     s_values = torch.rand(10000).to(device)
     s_values= 0.95*s_values/s_values.max()+0.005
     values=H(s_values)
