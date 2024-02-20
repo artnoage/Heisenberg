@@ -101,12 +101,12 @@ def dilation(l,x):
         return 
 
 def H(r):
-    return (2 * torch.pi) * (r - torch.sin(2 * torch.pi * r)) / (1 - torch.cos(2 * torch.pi * r))
+    return (2 * torch.pi* r - torch.sin(2 * torch.pi * r)) / (1 - torch.cos(2 * torch.pi * r))
 
 
 
 def H_inv_tensor(data):
-    if data.shape()[-1]!=1:
+    if data.shape[-1]!=1:
         print("input is wrong")
         return
     if data.dim()==1:
@@ -122,8 +122,8 @@ def norm_cc(input):
     t=input[...,2]
     zeta = torch.complex(xi, eta)  # Construct the complex number zeta
     abs_zeta_sq = torch.abs(zeta)**2
-    term1 = t * torch.sin(torch.pi * H_inv_tensor(t / abs_zeta_sq))
-    term2 = torch.abs(zeta) * torch.cos(H_inv_tensor(t / abs_zeta_sq))
+    term1 = t * torch.sin(torch.pi * H_inv_tensor(t / abs_zeta_sq))/torch.abs(zeta)
+    term2 = torch.abs(zeta) * torch.cos(torch.pi *H_inv_tensor(t / abs_zeta_sq))
     return term1  + term2
 
 def d_cc(input1,input2):

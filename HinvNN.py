@@ -2,21 +2,23 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 # Define the neural network with 3 hidden layers
 class DenseNN(nn.Module):
     def __init__(self):
         super(DenseNN, self).__init__()
         self.fc1 = nn.Linear(1,128)  # Input layer to first hidden layer
         self.fc2 = nn.Linear(128, 256) # First to second hidden layer
-        self.fc3 = nn.Linear(256, 128) # Second to third hidden layer
-        self.fc4 = nn.Linear(128, 1)   # Third hidden layer to output
+        self.fc3 = nn.Linear(256, 256)
+        self.fc4 = nn.Linear(256, 128) # Second to third hidden layer
+        self.fc5 = nn.Linear(128, 1)   # Third hidden layer to output
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = torch.relu(self.fc3(x))
-        x = self.fc4(x)
+        x = torch.relu(self.fc4(x))
+        x = self.fc5(x)
         return x
 
 # Initialize the network
@@ -29,8 +31,8 @@ criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Example dataset
-s_values = torch.rand(50000).to(dtype=torch.float64).to(device)
-s_values= 0.999999*s_values/s_values.max()+0.000002
+s_values = torch.rand(10000).to(dtype=torch.float64).to(device)
+s_values= 0.999995*s_values/s_values.max()
 values=H(s_values)
 x_train = values.unsqueeze(-1)
 y_train = s_values.unsqueeze(-1)

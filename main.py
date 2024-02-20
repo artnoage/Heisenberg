@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from utils import *
 import time
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 # Set a fixed value for v, theta, r
 v = torch.tensor(0.6).to(device)
 theta = torch.tensor(torch.pi/8).to(device)  # 45 degrees in radians
@@ -28,7 +28,7 @@ if True:
     s_values = torch.rand(1000).to(device)
     s_values= 0.95*s_values/s_values.max()+0.005
     values=H(s_values)
-    loaded_model = torch.jit.load('H_inv.pth')
+    loaded_model = torch.jit.load('H_inv.pth',map_location=device)
     prediction = loaded_model(values.unsqueeze(-1)).flatten()
     prediction2= H_inv_tensor(values)
     print(torch.max(torch.abs(prediction-prediction2)))
