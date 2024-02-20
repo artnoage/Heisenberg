@@ -101,10 +101,10 @@ def dilation(l,x):
         return 
 
 def H(r):
-    if r==0:
-        return 0
-    else:
-        return (2 * torch.pi* r - torch.sin(2 * torch.pi * r)) / (1 - torch.cos(2 * torch.pi * r))
+    print(r.shape)
+    a=torch.zeros_like(r)
+    H=torch.where(r !=0 , (2 * torch.pi* r - torch.sin(2 * torch.pi * r)) / (1 - torch.cos(2 * torch.pi * r)), 0)
+    return H
 
 
 

@@ -2,16 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 # Define the neural network with 3 hidden layers
 class DenseNN(nn.Module):
     def __init__(self):
         super(DenseNN, self).__init__()
-        self.fc1 = nn.Linear(1,128)  # Input layer to first hidden layer
-        self.fc2 = nn.Linear(128, 256) # First to second hidden layer
+        self.fc1 = nn.Linear(1,256)  # Input layer to first hidden layer
+        self.fc2 = nn.Linear(256, 256) # First to second hidden layer
         self.fc3 = nn.Linear(256, 256)
-        self.fc4 = nn.Linear(256, 128) # Second to third hidden layer
-        self.fc5 = nn.Linear(128, 1)   # Third hidden layer to output
+        self.fc4 = nn.Linear(256, 256) # Second to third hidden layer
+        self.fc5 = nn.Linear(256, 1)   # Third hidden layer to output
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -32,12 +32,12 @@ optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Example dataset
 s_values = torch.rand(10000).to(dtype=torch.float64).to(device)
-s_values= 2*0.9999999*s_values/s_values.max()-1 +0.0000001
+s_values= 2*0.99999995*s_values/s_values.max()-1 +0.00000005
 values=H(s_values)
 x_train = values.unsqueeze(-1)
 y_train = s_values.unsqueeze(-1)
 # Training loop
-epochs = 1000000
+epochs = 3000000
 for epoch in range(epochs):
     # Forward pass: Compute predicted y by passing x to the model
     y_pred = model(x_train)
