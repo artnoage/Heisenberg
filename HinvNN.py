@@ -2,63 +2,91 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 # Define the neural network with 3 hidden layers
 class DenseNN(nn.Module):
     def __init__(self):
         super(DenseNN, self).__init__()
-        self.fc1 = nn.Linear(1,256)  # Input layer to first hidden layer
-        self.fc2 = nn.Linear(256, 256) # First to second hidden layer
-        self.fc3 = nn.Linear(256, 256)
-        self.fc4 = nn.Linear(256, 256) # Second to third hidden layer
-        self.fc5 = nn.Linear(256, 1)   # Third hidden layer to output
+        # Define the first hidden layer
+        self.hidden1 = nn.Linear(1, 256)
+        # Define the second hidden layer
+        self.hidden2 = nn.Linear(256, 256)
+        # Define the third hidden layer
+        self.hidden3 = nn.Linear(256, 256)
+        # Define the fourth hidden layer
+        self.hidden4 = nn.Linear(256, 256)
+        # Define the output layer
+        self.output = nn.Linear(256, 1)
+        # Define the PReLU activation function with learnable parameters
+        self.activation1 = nn.PReLU()
+        self.activation2 = nn.PReLU()
+        self.activation3 = nn.PReLU()
+        self.activation4 = nn.PReLU()
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        x = torch.relu(self.fc4(x))
-        x = self.fc5(x)
+        # Pass the input through the first hidden layer, then activation
+        x = self.activation1(self.hidden1(x))
+        # Pass through the second hidden layer, then activation
+        x = self.activation2(self.hidden2(x))
+        # Pass through the third hidden layer, then activation
+        x = self.activation3(self.hidden3(x))
+        # Pass through the fourth hidden layer, then activation
+        x = self.activation4(self.hidden4(x))
+        # Pass through the output layer
+        x = self.output(x)
         return x
 
 # Initialize the network
+#model=torch.jit.load('H_inv.pth',map_location=device).to(dtype=torch.float64)
 model = DenseNN().to(dtype=torch.float64).to(device)
 
 # Define the loss function
 criterion = nn.MSELoss()
 
 # Define the optimizer
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
-
+optimizer = optim.AdamW(model.parameters(), lr=0.001,weight_decay=0.001)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.995)
 # Example dataset
-s_values = torch.rand(10000).to(dtype=torch.float64).to(device)
-s_values= 2*0.99999995*s_values/s_values.max()-1 +0.00000005
+epsilon=0.01
+s_values=torch.rand(1000).to(dtype=torch.float64).to(device)
+s_values=s_values/max(s_values)
+s_values = 2*s_values-1
+s_values= torch.clamp(s_values, min= -1 +epsilon, max= 1- epsilon )
 values=H(s_values)
-x_train = values.unsqueeze(-1)
-y_train = s_values.unsqueeze(-1)
 # Training loop
-epochs = 3000000
+epochs =5000000
+
 for epoch in range(epochs):
+    x_train = values.unsqueeze(-1)
+    y_train = s_values.unsqueeze(-1)
     # Forward pass: Compute predicted y by passing x to the model
     y_pred = model(x_train)
 
     # Compute and print loss
     loss = criterion(y_pred, y_train)
-    if epoch % 100 == 0:  # Print the loss every 100 epochs
-        print(f'Epoch {epoch} | Loss: {loss.item()}')
-
+    
     # Zero gradients, perform a backward pass, and update the weights.
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-
+    if epoch % 1000 == 0:  # Print the loss every 100 epochs
+        epsilon=max(epsilon*0.999,5e-07)
+        s_values=torch.rand(5000).to(dtype=torch.float64).to(device)
+        s_values=s_values/max(s_values)
+        s_values = 2*s_values-1
+        s_values= torch.clamp(s_values, min= -1 +epsilon, max= 1- epsilon )
+        s_values=torch.concat([s_values,-s_values])
+        values=H(s_values)
+        print("epsilon is ", epsilon, f'Epoch {epoch} | Loss: {loss.item()}')
+        scheduler.step()
     # Save the entire model after 10,000 epochs
-    if epoch == epochs - 1:
+    if (epoch+1)  % 500000==0:
         example =x_train[0].float()
         model.float()
         traced_model = torch.jit.trace(model, example)
+        model.double()
     # Save the traced model
-        torch.jit.save(traced_model, "H_inv.pth")
+        torch.jit.save(traced_model, "H_test.pth")
         print('Entire model saved after 10000 epochs.')
 
 # Note: The saved model can be loaded with `torch.load('dense_nn_model_complete.pth')`.

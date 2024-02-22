@@ -101,7 +101,6 @@ def dilation(l,x):
         return 
 
 def H(r):
-    print(r.shape)
     a=torch.zeros_like(r)
     H=torch.where(r !=0 , (2 * torch.pi* r - torch.sin(2 * torch.pi * r)) / (1 - torch.cos(2 * torch.pi * r)), 0)
     return H
@@ -114,7 +113,7 @@ def H_inv_tensor(data):
     if data.shape[-1]!=1:
         print("input is wrong")
         return
-    loaded_model = torch.jit.load('H_inv.pth',map_location=data.device)
+    loaded_model = torch.jit.load('H_inv.pth',map_location=data.device).float()
     prediction = loaded_model(data).flatten()
     return prediction
 
@@ -134,22 +133,38 @@ def d_cc(input1,input2):
     return norm_cc(operated)
 
 def Kernel_unintegrated(input_tensor):
-    # Assuming the last dimension of the input_tensor is 5, in the order: tau, y, t, xi, eta
-    tau = input_tensor[..., 0]  # Extracts tau
-    y = input_tensor[..., 1]    # Extracts y
+    # Assuming the last dimension of the input_tensor is 4, in the order: tau, y, t, r
+    h = input_tensor[..., 0]  # Extracts h
+    rsquare = input_tensor[..., 1]    # Extracts r
     t = input_tensor[..., 2]    # Extracts t
-    xi = input_tensor[..., 3]   # Extracts xi
-    eta = input_tensor[..., 4]  # Extracts eta
-
+    y = input_tensor[..., 3]   # Extracts y
+   
     # Compute the expression
-    part1 = (1 / (2 * torch.pi * tau)) ** 2
-    part2 = (2 * y) / torch.sinh(2 * y)
-    part3 = torch.cos((t * y) / tau)
-    part4 = torch.exp(-((xi ** 2 + eta ** 2) / (2 * tau)) * (2 * y) / torch.tanh(2 * y))
+    part1 = (1 / (4 * torch.pi * h)) ** 2
+    part2 = torch.where(y == 0, torch.tensor(1.0), (2 * y) / torch.sinh(2 * y))
+    part3 = torch.cos((t * y) / 2*h)
+    part4a=torch.where(y == 0, torch.tensor(1.0), (2 * y) / torch.tanh(2 * y))
+    part4 = torch.exp(-((rsquare) / (4 * h)) * (part4a))
 
+   
     result = part1 * part2 * part3 * part4
-
     # Ensure the last dimension is 1 by summing or averaging if needed
     # Here, the last dimension is already 1 due to the operations, so we can return the result directly
     return result
+
+def Kernel(input_tensor,precision=4):
+    original_tuples_expanded=input_tensor.unsqueeze(1)
+    l=15
+    B=0
+    for j in range(-l,l):
+        y_values = torch.linspace(j, j+1, precision).to(input_tensor.device)
+        new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
+        combined_tensor = torch.cat((original_tuples_expanded.expand(-1, precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
+        torch.set_printoptions(threshold=10000)
+        print(combined_tensor)
+        exit()
+        A=Kernel_unintegrated(A)
+        A=torch.mean(A,dim=0)
+        B=B+A      
+    return B
 
