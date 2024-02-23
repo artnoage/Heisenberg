@@ -2,13 +2,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
-device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+device="cpu"
+
 # Define the neural network with 3 hidden layers
-class DenseNN(nn.Module):
+class KernelNN(nn.Module):
     def __init__(self):
-        super(DenseNN, self).__init__()
+        super(KernelNN, self).__init__()
         # Define the first hidden layer
-        self.hidden1 = nn.Linear(1, 256)
+        self.hidden1 = nn.Linear(3, 256)
         # Define the second hidden layer
         self.hidden2 = nn.Linear(256, 256)
         # Define the third hidden layer
@@ -37,28 +39,28 @@ class DenseNN(nn.Module):
         return x
 
 # Initialize the network
-model=torch.jit.load('H_inv.pth',map_location=device).to(dtype=torch.float64)
-#model = DenseNN().to(dtype=torch.float64).to(device)
+model = KernelNN().to(dtype=torch.float64).to(device)
 
 # Define the loss function
 criterion = nn.MSELoss()
 
 # Define the optimizer
-optimizer = optim.AdamW(model.parameters(), lr=0.0005,weight_decay=0.001)
+optimizer = optim.AdamW(model.parameters(), lr=0.001,weight_decay=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.995)
 # Example dataset
-epsilon=0.005
-s_values=torch.rand(1000).to(dtype=torch.float64).to(device)
-s_values=s_values/max(s_values)
-s_values = 2*s_values-1
-s_values= torch.clamp(s_values, min= -1 +epsilon, max= 1- epsilon )
-values=H(s_values)
+epsilon=0.01
+
+
 # Training loop
-epochs =5000000
+epochs =100000
 
 for epoch in range(epochs):
-    x_train = values.unsqueeze(-1)
-    y_train = s_values.unsqueeze(-1)
+    h_value = (1-epsilon)*torch.rand(3).to(device).to(dtype=torch.float64)+epsilon
+    r_value =  5*torch.rand(3).to(device).to(dtype=torch.float64)  # r should be positive
+    t_value = 10*(torch.rand(3).to(device).to(dtype=torch.float64)-1/2) # t should be positive
+    point=torch.cartesian_prod(h_value,r_value,t_value)
+    x_train =point
+    y_train = Kernel(point)
     # Forward pass: Compute predicted y by passing x to the model
     y_pred = model(x_train)
 
@@ -70,25 +72,13 @@ for epoch in range(epochs):
     loss.backward()
     optimizer.step()
     if epoch % 1000 == 0:  # Print the loss every 100 epochs
-        epsilon=max(epsilon*0.999,1e-05)
-        s_values=torch.rand(5000).to(dtype=torch.float64).to(device)
-        s_values=s_values/max(s_values)
-        s_values = 2*s_values-1
-        s_values= torch.clamp(s_values, min= -1 +epsilon, max= 1- epsilon )
-        s_values=torch.concat([s_values,-s_values])
-        values=H(s_values)
         print("epsilon is ", epsilon, f'Epoch {epoch} | Loss: {loss.item()}')
         scheduler.step()
     # Save the entire model after 10,000 epochs
-    if (epoch+1)  % 500000==0:
+    if (epoch+1)  % 100000==0:
         example =x_train[0]
         traced_model = torch.jit.trace(model, example)
     # Save the traced model
-        torch.jit.save(traced_model, "HNN.pth")
-        print('Entire model saved after 10000 epochs.')
+        torch.jit.save(traced_model, "KernelNN.pth")
+        print('Entire model saved every 100000 epochs.')
 
-# Note: The saved model can be loaded with `torch.load('dense_nn_model_complete.pth')`.
-# Remember that when loading the model in this way, you do not need to define the model class first.
-# However, this approach requires that the code be run where PyTorch is installed.
-
-# Adjust learning rate, the architecture (e.g., number of neurons in hidden layers), or other parameters as needed.
