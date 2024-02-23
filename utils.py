@@ -150,24 +150,19 @@ def Kernel_unintegrated(input_tensor):
     part4a = torch.where(y == 0, torch.tensor(1.0), (2 * y)/torch.tanh(2 * y))
     part4  = torch.exp(-((rsquare) / (4 * h)) * (part4a))
 
-   
     result = part1 * part2 * part3 * part4
     # Ensure the last dimension is 1 by summing or averaging if needed
     # Here, the last dimension is already 1 due to the operations, so we can return the result directly
     return result
 
-def Kernel(input_tensor,precision=3):
+def Kernel(input_tensor,precision=20000, int=10):
     original_tuples_expanded=input_tensor.unsqueeze(1)
-    l=15
-    B=0
-    for j in range(-l,l):
-        y_values = torch.linspace(j, j+1, precision).to(input_tensor.device)
-        new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
-        combined_tensor = torch.cat((original_tuples_expanded.expand(-1, precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
-        A=Kernel_unintegrated(combined_tensor)
-        A=torch.mean(A,dim=1)
-        B=B+A      
-    return B
+    y_values = torch.linspace(-int, int, precision,device=input_tensor.device)
+    new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
+    combined_tensor = torch.cat((original_tuples_expanded.expand(-1, precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
+    A=Kernel_unintegrated(combined_tensor)
+    A=2*int*torch.mean(A,dim=1)      
+    return A
 
 
 

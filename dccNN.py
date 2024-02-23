@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
-device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Define the neural network with 3 hidden layers
 class DenseNN(nn.Module):
     def __init__(self):
@@ -58,7 +58,7 @@ cartesian_coords = spherical_to_cartesian(spherical_coords)
 epochs =100000
 
 for epoch in range(epochs):
-    x_train =cartesian_coords
+    x_train = cartesian_coords
     y_train = (spherical_coords [:,0]*spherical_coords [:,3]).unsqueeze(-1)
     # Forward pass: Compute predicted y by passing x to the model
     y_pred = model(x_train)

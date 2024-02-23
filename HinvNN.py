@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
-device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Define the neural network with 3 hidden layers
 class DenseNN(nn.Module):
     def __init__(self):
@@ -48,7 +48,7 @@ optimizer = optim.AdamW(model.parameters(), lr=0.0005,weight_decay=0.001)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.995)
 # Example dataset
 epsilon=0.005
-s_values=torch.rand(1000).to(dtype=torch.float64).to(device)
+s_values=torch.rand(1000,device=device,dtype=torch.float64)
 s_values=s_values/max(s_values)
 s_values = 2*s_values-1
 s_values= torch.clamp(s_values, min= -1 +epsilon, max= 1- epsilon )
@@ -71,7 +71,7 @@ for epoch in range(epochs):
     optimizer.step()
     if epoch % 1000 == 0:  # Print the loss every 100 epochs
         epsilon=max(epsilon*0.999,1e-05)
-        s_values=torch.rand(5000).to(dtype=torch.float64).to(device)
+        s_values=torch.rand(5000,device=device,dtype=torch.float64)
         s_values=s_values/max(s_values)
         s_values = 2*s_values-1
         s_values= torch.clamp(s_values, min= -1 +epsilon, max= 1- epsilon )

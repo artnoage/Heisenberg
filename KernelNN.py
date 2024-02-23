@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
-#device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
-device="cpu"
+import time
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 # Define the neural network with 3 hidden layers
 class KernelNN(nn.Module):
@@ -45,7 +46,7 @@ model = KernelNN().to(dtype=torch.float64).to(device)
 criterion = nn.MSELoss()
 
 # Define the optimizer
-optimizer = optim.AdamW(model.parameters(), lr=0.001,weight_decay=0.001)
+optimizer = optim.AdamW(model.parameters(), lr=0.001,weight_decay=0.01)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.995)
 # Example dataset
 epsilon=0.01
@@ -53,17 +54,17 @@ epsilon=0.01
 
 # Training loop
 epochs =100000
-
+start=time.time()
 for epoch in range(epochs):
-    h_value = (1-epsilon)*torch.rand(3).to(device).to(dtype=torch.float64)+epsilon
-    r_value =  5*torch.rand(3).to(device).to(dtype=torch.float64)  # r should be positive
-    t_value = 10*(torch.rand(3).to(device).to(dtype=torch.float64)-1/2) # t should be positive
-    point=torch.cartesian_prod(h_value,r_value,t_value)
+    
+    h_value = (1-epsilon)*torch.rand(1000,device=device,dtype=torch.float64)+epsilon
+    r_value = 10*torch.rand(1000,device=device,dtype=torch.float64)  # r should be positive
+    t_value = 10*(torch.rand(1000,device=device,dtype=torch.float64)-1/2) # t should be positive
+    point=torch.stack([h_value,r_value,t_value],dim=1)
     x_train =point
-    y_train = Kernel(point)
+    y_train = Kernel(point).unsqueeze(1)
     # Forward pass: Compute predicted y by passing x to the model
     y_pred = model(x_train)
-
     # Compute and print loss
     loss = criterion(y_pred, y_train)
     
@@ -71,8 +72,10 @@ for epoch in range(epochs):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    if epoch % 1000 == 0:  # Print the loss every 100 epochs
+    if epoch % 100 == 0:  # Print the loss every 100 epochs
         print("epsilon is ", epsilon, f'Epoch {epoch} | Loss: {loss.item()}')
+        #print("time is", time.time()-start)
+        start=time.time()
         scheduler.step()
     # Save the entire model after 10,000 epochs
     if (epoch+1)  % 100000==0:
@@ -81,4 +84,3 @@ for epoch in range(epochs):
     # Save the traced model
         torch.jit.save(traced_model, "KernelNN.pth")
         print('Entire model saved every 100000 epochs.')
-

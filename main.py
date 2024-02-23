@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from utils import *
 import time
 
-device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 for i in range(20):
     epsilon=0.001
     s_values = torch.rand(6).to(device)
