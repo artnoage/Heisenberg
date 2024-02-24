@@ -37,24 +37,23 @@ class DenseNN(nn.Module):
         return x
 
 # Initialize the network
-model=torch.jit.load('H_inv.pth',map_location=device).to(dtype=torch.float64)
-#model = DenseNN().to(dtype=torch.float64).to(device)
+model = DenseNN().to(dtype=torch.float64).to(device)
 
 # Define the loss function
 criterion = nn.MSELoss()
 
 # Define the optimizer
-optimizer = optim.AdamW(model.parameters(), lr=0.0005,weight_decay=0.001)
+optimizer = optim.AdamW(model.parameters(), lr=0.01,weight_decay=0.01)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.995)
 # Example dataset
-epsilon=0.005
+epsilon=0.01
 s_values=torch.rand(1000,device=device,dtype=torch.float64)
 s_values=s_values/max(s_values)
 s_values = 2*s_values-1
 s_values= torch.clamp(s_values, min= -1 +epsilon, max= 1- epsilon )
 values=H(s_values)
 # Training loop
-epochs =5000000
+epochs =1000000
 
 for epoch in range(epochs):
     x_train = values.unsqueeze(-1)

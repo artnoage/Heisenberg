@@ -1,7 +1,7 @@
 import torch
 from scipy.optimize import newton
 import numpy as np
-
+device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
 def spherical_to_cartesian(spherical_coords):
     """
     Convert spherical coordinates to Cartesian coordinates for higher-dimensional tensors.
@@ -155,15 +155,23 @@ def Kernel_unintegrated(input_tensor):
     # Here, the last dimension is already 1 due to the operations, so we can return the result directly
     return result
 
-def Kernel(input_tensor,precision=20000, int=10):
+def Kernel(input_tensor,precision=5000,int=7):
     original_tuples_expanded=input_tensor.unsqueeze(1)
-    y_values = torch.linspace(-int, int, precision,device=input_tensor.device)
+    y_values = torch.linspace(0,int, int*precision,dtype=input_tensor.dtype, device=input_tensor.device)
     new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
-    combined_tensor = torch.cat((original_tuples_expanded.expand(-1, precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
+    combined_tensor = torch.cat((original_tuples_expanded.expand(-1, int*precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
     A=Kernel_unintegrated(combined_tensor)
-    A=2*int*torch.mean(A,dim=1)      
+    A=2*torch.mean(A,dim=1)/precision      
     return A
 
+epsilon=0.01
+h_value = (1-epsilon)*torch.rand(500,device=device,dtype=torch.float64)+epsilon
+r_value = 10*torch.rand(500,device=device,dtype=torch.float64)  # r should be positive
+t_value = 10*(torch.rand(500,device=device,dtype=torch.float64)-1/2) # t should be positive
+point=torch.stack([h_value,r_value,t_value],dim=1)
 
+A=Kernel(point,precision=2000)
+B=Kernel(point,precision=2400)
+print((A-B).max())
 
 
