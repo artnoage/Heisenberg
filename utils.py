@@ -1,7 +1,8 @@
 import torch
 from scipy.optimize import newton
 import numpy as np
-device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+import time
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def spherical_to_cartesian(spherical_coords):
     """
     Convert spherical coordinates to Cartesian coordinates for higher-dimensional tensors.
@@ -111,7 +112,7 @@ def H_inv_tensor(data):
     if data.shape[-1]!=1:
         print("input is wrong")
         return
-    loaded_model = torch.jit.load('H_inv.pth',map_location=data.device).to(data.dtype)
+    loaded_model = torch.jit.load('NN/HNN.pth',map_location=data.device).to(data.dtype)
     prediction = loaded_model(data).flatten()
     return prediction
 
@@ -127,7 +128,7 @@ def norm_cc(input):
     return term1  + term2
 
 def norm_ccNN(input):
-    loaded_model = torch.jit.load('dccNN.pth',map_location=input.device).to(input.dtype)
+    loaded_model = torch.jit.load('NN/dccNN.pth',map_location=input.device).to(input.dtype)
     prediction = loaded_model(input)
     return prediction
 
@@ -136,42 +137,6 @@ def d_cc(input1,input2):
     return norm_cc(operated)
 
 
-def Kernel_unintegrated(input_tensor):
-    # Assuming the last dimension of the input_tensor is 4, in the order: tau, y, t, r
-    h = input_tensor[..., 0]  # Extracts h
-    rsquare = input_tensor[..., 1]    # Extracts R^2=\xi^2+\eta^2
-    t = input_tensor[..., 2]    # Extracts t
-    y = input_tensor[..., 3]   # Extracts y
-   
-    # Compute the expression
-    part1  = (1 / (4 * torch.pi * h)) ** 2
-    part2 = torch.where(y == 0, torch.tensor(1.0), (2 * y) / torch.sinh(2 * y))
-    part3  = torch.cos((t * y) / 2*h)
-    part4a = torch.where(y == 0, torch.tensor(1.0), (2 * y)/torch.tanh(2 * y))
-    part4  = torch.exp(-((rsquare) / (4 * h)) * (part4a))
 
-    result = part1 * part2 * part3 * part4
-    # Ensure the last dimension is 1 by summing or averaging if needed
-    # Here, the last dimension is already 1 due to the operations, so we can return the result directly
-    return result
-
-def Kernel(input_tensor,precision=5000,int=7):
-    original_tuples_expanded=input_tensor.unsqueeze(1)
-    y_values = torch.linspace(0,int, int*precision,dtype=input_tensor.dtype, device=input_tensor.device)
-    new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
-    combined_tensor = torch.cat((original_tuples_expanded.expand(-1, int*precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
-    A=Kernel_unintegrated(combined_tensor)
-    A=2*torch.mean(A,dim=1)/precision      
-    return A
-
-epsilon=0.01
-h_value = (1-epsilon)*torch.rand(500,device=device,dtype=torch.float64)+epsilon
-r_value = 10*torch.rand(500,device=device,dtype=torch.float64)  # r should be positive
-t_value = 10*(torch.rand(500,device=device,dtype=torch.float64)-1/2) # t should be positive
-point=torch.stack([h_value,r_value,t_value],dim=1)
-
-A=Kernel(point,precision=2000)
-B=Kernel(point,precision=2400)
-print((A-B).max())
 
 

@@ -5,6 +5,7 @@ from utils import *
 import time
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device="cpu"
 for i in range(20):
     epsilon=0.001
     s_values = torch.rand(6).to(device)
@@ -17,15 +18,13 @@ for i in range(20):
 
   
 
-    spherical_coords = torch.cartesian_prod(s_values, v_values, theta_values, r_values)
+    spherical_coords = torch.stack([s_values, v_values, theta_values, r_values],dim=1)
     test=spherical_coords[:,0]*spherical_coords[:,3]
 # Convert to Cartesian coordinates
     if  True:
         cartesian_coords = spherical_to_cartesian(spherical_coords)
-        norm=norm_cc(cartesian_coords)
         norm2=norm_ccNN(cartesian_coords)
-        print(torch.max(torch.abs(norm-test)))
-        print(torch.max(torch.abs(norm2-test)))
+        print((torch.abs(norm2-test)))
 
 
     if False:
