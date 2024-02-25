@@ -3,16 +3,18 @@ import torch.nn as nn
 import torch.optim as optim
 from utils import *
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#device="cpu"
 # Define the neural network with 3 hidden layers
-class DenseNN(nn.Module):
+
+class dccNN(nn.Module):
     def __init__(self):
-        super(DenseNN, self).__init__()
+        super(dccNN, self).__init__()
         # Define the first hidden layer
         self.hidden1 = nn.Linear(3, 256)
         # Define the second hidden layer
-        self.hidden2 = nn.Linear(256, 256)
+        self.hidden2 = nn.Linear(256,512)
         # Define the third hidden layer
-        self.hidden3 = nn.Linear(256, 256)
+        self.hidden3 = nn.Linear(512, 256)
         # Define the fourth hidden layer
         self.hidden4 = nn.Linear(256, 256)
         # Define the output layer
@@ -37,27 +39,27 @@ class DenseNN(nn.Module):
         return x
 
 # Initialize the network
-model = DenseNN().to(dtype=torch.float64).to(device)
+model = dccNN().to(dtype=torch.float64).to(device)
 
 # Define the loss function
 criterion = nn.MSELoss()
 
 # Define the optimizer
 optimizer = optim.AdamW(model.parameters(), lr=0.001,weight_decay=0.001)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.995)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9995)
 # Example dataset
-epsilon=0.000001
-s_values = torch.rand(10).to(dtype=torch.float64).to(device)
-v_values = (2*torch.pi)*torch.clamp(torch.rand(10).to(device).to(dtype=torch.float64)-1,min=-1+epsilon,max=1-epsilon)  
-theta_values = torch.rand(10).to(dtype=torch.float64).to(device)*2*torch.pi  # 45 degrees in radians
-r_values = torch.rand(10).to(dtype=torch.float64).to(device) # r should be positive
-spherical_coords = torch.cartesian_prod(s_values, v_values, theta_values, r_values)
-cartesian_coords = spherical_to_cartesian(spherical_coords)
 
 # Training loop
-epochs =100000
+epochs =5000000
 
 for epoch in range(epochs):
+    s_values = torch.rand(200,device=device,dtype=torch.float64)
+    v_values = (2*torch.pi)*(2*torch.rand(200,device=device,dtype=torch.float64)-1)    
+    theta_values = 2*torch.pi*torch.rand(200,device=device,dtype=torch.float64)  # 45 degrees in radians
+    r_values = 10*torch.rand(200,device=device,dtype=torch.float64) # r should be positive
+    spherical_coords = torch.stack([s_values, v_values, theta_values, r_values],dim=1)
+    cartesian_coords = spherical_to_cartesian(spherical_coords)
+
     x_train = cartesian_coords
     y_train = (spherical_coords [:,0]*spherical_coords [:,3]).unsqueeze(-1)
     # Forward pass: Compute predicted y by passing x to the model
@@ -70,16 +72,12 @@ for epoch in range(epochs):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    if epoch % 1000 == 0:  # Print the loss every 100 epochs
-        epsilon=max(epsilon*0.999,5e-07)
-        s_values = torch.rand(10).to(dtype=torch.float64).to(device)
-        v_values = (2*torch.pi)*torch.clamp(torch.rand(10).to(device).to(dtype=torch.float64)-1,min=-1+epsilon,max=1-epsilon)  
-        theta_values = torch.rand(10).to(dtype=torch.float64).to(device)*2*torch.pi  # 45 degrees in radians
-        r_values = torch.rand(10).to(dtype=torch.float64).to(device) # r should be positive
-        spherical_coords = torch.cartesian_prod(s_values, v_values, theta_values, r_values)
-        cartesian_coords = spherical_to_cartesian(spherical_coords)
-        print("epsilon is ", epsilon, f'Epoch {epoch} | Loss: {loss.item()}')
+    
+    if epoch % 100 == 0:  # Print the loss every 100 epochs
+        print(f'Epoch {epoch} | Loss: {loss.item()}')
+        learning_rate = optimizer.param_groups[0]['lr']
         scheduler.step()
+        print(f'Current learning rate: {learning_rate}')
     # Save the entire model after 10,000 epochs
     if (epoch+1)  % 100000==0:
         example =x_train[0]

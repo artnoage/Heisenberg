@@ -67,20 +67,20 @@ class KernelNN(nn.Module):
         return x
 
 # Initialize the network
-model = KernelNN().to(dtype=torch.float64).to(device)
-
+#model = KernelNN().to(dtype=torch.float64).to(device)
+model=torch.jit.load("KernelNN.pth")
 # Define the loss function
 criterion = nn.MSELoss()
 
 # Define the optimizer
-optimizer = optim.AdamW(model.parameters(), lr=0.01,weight_decay=0.01)
+optimizer = optim.AdamW(model.parameters(), lr=0.001,weight_decay=0.01)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.995)
 # Example dataset
 epsilon=0.001
 
 
 # Training loop
-epochs =100000
+epochs =100001
 start=time.time()
 for epoch in range(epochs):
     
@@ -90,23 +90,41 @@ for epoch in range(epochs):
     point=torch.stack([h_value,r_value,t_value],dim=1)
     x_train =point
     y_train = Kernel(point).unsqueeze(1)
+    if 'accum' not in globals():
+        accum=torch.cat([x_train,y_train],dim=1)
+        print("accum")
+    accum_add= torch.cat([x_train,y_train],dim=1)
+    accum=torch.cat([accum,accum_add],dim=0)   
     # Forward pass: Compute predicted y by passing x to the model
     y_pred = model(x_train)
-    # Compute and print loss
     loss = criterion(y_pred, y_train)
     
     # Zero gradients, perform a backward pass, and update the weights.
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    if epoch % 100 == 0:  # Print the loss every 100 epochs
+    if epoch % 100 == 0 and epoch!=0:  # Print the loss every 100 epochs
         print("epsilon is ", epsilon, f'Epoch {epoch} | Loss: {loss.item()}')
         #print("time is", time.time()-start)
         scheduler.step()
     # Save the entire model after 10,000 epochs
-    if (epoch+1)  % 10000==0:
+    if epoch % 1000 == 0:  # goes through the previous data created in the last 1000 points
+        for i in range(1000):
+            x_train=accum[i*50:(i+1)*50,0:3]
+            y_train=accum[i*50:(i+1)*50,3]
+            y_pred = model(x_train)
+            # Compute and print loss
+            loss = criterion(y_pred, y_train)
+    
+        # Zero gradients, perform a backward pass, and update the weights.
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        del accum
+    if epoch  % 10000==0 and epoch!=0:
         example =x_train[0]
         traced_model = torch.jit.trace(model, example)
+
     # Save the traced model
         torch.jit.save(traced_model, "KernelNN.pth")
-        print('Entire model saved every 100000 epochs.')
+        print('Entire model saved every 10000 epochs.')
