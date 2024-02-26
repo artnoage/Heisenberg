@@ -2,7 +2,6 @@ import torch
 from scipy.optimize import newton
 import numpy as np
 import time
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def spherical_to_cartesian(spherical_coords):
     """
     Convert spherical coordinates to Cartesian coordinates for higher-dimensional tensors.
@@ -89,11 +88,9 @@ def op(x,y):
 
 
 def dilation(l,x):
-    if is_real_number(l):
+    if x.shape[-1]==3 and is_real_number(l):
         lten=torch.tensor([l,l,l**2])
         _, lten=match(x,lten)
-        return lten*x
-    elif x.shape==l.shape:
         return lten*x
     else:
         print("something wrong with dimensions")
@@ -134,17 +131,57 @@ def norm_ccNN(input):
 
 def d_cc(input1,input2):
     operated=op(-input2,input1)
-    return norm_cc(operated)
+    return norm_cc(operated.unsqueeze(0))
+
+def d_ccNN(input1,input2):
+    operated=op(-input2,input1)
+    return norm_ccNN(operated)
+
+def Kernel_unintegrated(input_tensor):
+    # Assuming the last dimension of the input_tensor is 4, in the order: h, R, t, y
+    h = input_tensor[..., 0]  # Extracts h
+    rsquare = input_tensor[..., 1]    # Extracts R^2=\xi^2+\eta^2
+    t = input_tensor[..., 2]    # Extracts t
+    y = input_tensor[..., 3]   # Extracts y
+   
+    # Compute the expression
+    part1  = (1 / (4 * torch.pi * h)) ** 2
+    part2 = torch.where(y == 0, torch.tensor(1.0), (2 * y) / torch.sinh(2 * y))
+    part3  = torch.cos((t * y) / (2*h))
+    part4a = torch.where(y == 0, torch.tensor(1.0), (2 * y)/torch.tanh(2 * y))
+    part4b  = -(rsquare / (4 * h)) * (part4a)
+    part4 =    torch.exp(part4b)
+    result = part2 * part3 * part4
+    return result
+
+
+def Kernel(input_tensor,precision=int(10**8)):
+    h = input_tensor[..., 0]
+    part1  = (1 / (4 * torch.pi * h)) ** 2
+    original_tuples_expanded=input_tensor.unsqueeze(1)
+    B=0
+    for i in range(1000):
+        y_values = torch.linspace(i/100,(i+1)/100, precision,dtype=input_tensor.dtype, device=input_tensor.device)
+        new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
+        combined_tensor = torch.cat((original_tuples_expanded.expand(-1, precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
+        A=part1*Kernel_unintegrated(combined_tensor)
+        A=torch.mean(A,dim=1)
+        B=B+A/100
+        print(i)
+    B= 2*B   
+    return B
 
 def kernel(data,timestep):
-    timetensor=timestep*torch.ones([data.shape[0],1])
+    timetensor=timestep*torch.ones([data.shape[0],1],device=data.device,dtype=data.dtype)
     x=data[...,0]
     y=data[...,1]
     r=(x**2+y**2).unsqueeze(-1)
     t=data[...,2].unsqueeze(-1)
     data=torch.cat([timetensor,r,t],dim=1)
-    kernel_model = torch.jit.load('NN/KernelNN.pth',map_location=data.device).to(data.dtype)
-    prediction = kernel_model(data).flatten()
+    #kernel_model = torch.jit.load('NN/KernelNN.pth',map_location=data.device).to(data.dtype)
+    #prediction = kernel_model(data).flatten()
+    
+    prediction=Kernel(data)
     return prediction
     
 

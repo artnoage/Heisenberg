@@ -1,93 +1,119 @@
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
 from utils import *
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
 #device="cpu"
 # Define the neural network with 3 hidden layers
+class SoftLInfinityNormLoss(nn.Module):
+    def __init__(self, beta=10):
+        """
+        Initializes the SoftLInfinityNormLoss module.
+        
+        Args:
+        - beta (float): Controls the smoothness of the approximation. Higher values make the function more like max.
+        """
+        super(SoftLInfinityNormLoss, self).__init__()
+        self.beta = beta
+
+    def forward(self, predictions, targets):
+        """
+        Forward pass of the loss function.
+        
+        Args:
+        - predictions (torch.Tensor): The predicted values.
+        - targets (torch.Tensor): The ground truth values.
+        
+        Returns:
+        - torch.Tensor: The computed soft L-infinity norm loss.
+        """
+        # Compute the absolute difference
+        errors = torch.abs(predictions - targets)
+        
+        # Compute the soft L-infinity norm using Log-Sum-Exp for a smooth approximation of max
+        soft_linf = (1 / self.beta) * torch.log(torch.mean(torch.exp(self.beta * errors)))
+        
+        return soft_linf
+
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
 
 class dccNN(nn.Module):
     def __init__(self):
         super(dccNN, self).__init__()
-        # Define the first hidden layer
-        self.hidden1 = nn.Linear(3, 256)
-        # Define the second hidden layer
-        self.hidden2 = nn.Linear(256,512)
-        # Define the third hidden layer
-        self.hidden3 = nn.Linear(512, 256)
-        # Define the fourth hidden layer
-        self.hidden4 = nn.Linear(256, 256)
-        # Define the output layer
-        self.output = nn.Linear(256, 1)
-        # Define the PReLU activation function with learnable parameters
-        self.activation1 = nn.PReLU()
-        self.activation2 = nn.PReLU()
-        self.activation3 = nn.PReLU()
-        self.activation4 = nn.PReLU()
-
+        self.layer1 = nn.Linear(in_features=3, out_features=8*64)  # Input layer adapted for 3 input features
+        self.layer2 = nn.Linear(in_features=8*64, out_features=8*64)
+        self.layer3 = nn.Linear(in_features=8*64, out_features=8*32)
+        self.layer4 = nn.Linear(in_features=8*32, out_features=8*16)
+        self.output_layer = nn.Linear(in_features=8*16, out_features=1)  # Output layer adapted for 1 output
+        self.swish = Swish()
+        self.elu=nn.ELU()
+    
     def forward(self, x):
-        # Pass the input through the first hidden layer, then activation
-        x = self.activation1(self.hidden1(x))
-        # Pass through the second hidden layer, then activation
-        x = self.activation2(self.hidden2(x))
-        # Pass through the third hidden layer, then activation
-        x = self.activation3(self.hidden3(x))
-        # Pass through the fourth hidden layer, then activation
-        x = self.activation4(self.hidden4(x))
-        # Pass through the output layer
-        x = self.output(x)
+        x = self.elu(self.layer1(x))
+        x = self.elu(self.layer2(x))
+        x = self.elu(self.layer3(x))
+        x = self.swish(self.layer4(x))
+        x = self.output_layer(x)  # No softmax needed since output is 1 (assuming regression or binary classification)
         return x
 
-# Initialize the network
-model = dccNN().to(dtype=torch.float64).to(device)
-
-# Define the loss function
-criterion = nn.MSELoss()
-
-# Define the optimizer
-optimizer = optim.AdamW(model.parameters(), lr=0.001,weight_decay=0.001)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9995)
-# Example dataset
-
-# Training loop
-epochs =5000000
-
-for epoch in range(epochs):
-    s_values = torch.rand(200,device=device,dtype=torch.float64)
-    v_values = (2*torch.pi)*(2*torch.rand(200,device=device,dtype=torch.float64)-1)    
-    theta_values = 2*torch.pi*torch.rand(200,device=device,dtype=torch.float64)  # 45 degrees in radians
-    r_values = 10*torch.rand(200,device=device,dtype=torch.float64) # r should be positive
+def get_new_data():
+    s_values = torch.rand(5*10**6,device=device,dtype=torch.float64)
+    v_values = (2*torch.pi)*(2*torch.rand(5*10**6,device=device,dtype=torch.float64)-1)    
+    theta_values = 2*torch.pi*torch.rand(5*10**6,device=device,dtype=torch.float64)  # 45 degrees in radians
+    r_values = 10*torch.rand(5*10**6,device=device,dtype=torch.float64) # r should be positive
     spherical_coords = torch.stack([s_values, v_values, theta_values, r_values],dim=1)
     cartesian_coords = spherical_to_cartesian(spherical_coords)
+    labels=(spherical_coords [:,0]*spherical_coords [:,3]).unsqueeze(-1)
+    return cartesian_coords, labels
 
-    x_train = cartesian_coords
-    y_train = (spherical_coords [:,0]*spherical_coords [:,3]).unsqueeze(-1)
-    # Forward pass: Compute predicted y by passing x to the model
-    y_pred = model(x_train)
+X, y = get_new_data()  # Load your initial dataset
 
-    # Compute and print loss
-    loss = criterion(y_pred, y_train)
+
+train_dataset = TensorDataset(X, y)
+batch_size = 128
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+
+model = dccNN().to(dtype=torch.float64).to(device)
+#model=torch.jit.load('dccNN.pth',map_location=device).to(dtype=torch.float64)
+# Define the loss function
+criterion = SoftLInfinityNormLoss()
+
+# Define the optimizer
+optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.005)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.99998)
+
+# Training loop
+epochs =10
+
+for epoch in range(epochs):
+   
+    for batch_idx, (data, targets) in enumerate(train_loader):
+        # Forward pass: Compute predicted outputs by passing inputs to the model
+        outputs = model(data)
+    # Calculate the loss
+        loss = criterion(outputs, targets)
     
-    # Zero gradients, perform a backward pass, and update the weights.
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+        # Clear the gradients of all optimized variables
+        optimizer.zero_grad()
     
-    if epoch % 100 == 0:  # Print the loss every 100 epochs
-        print(f'Epoch {epoch} | Loss: {loss.item()}')
-        learning_rate = optimizer.param_groups[0]['lr']
-        scheduler.step()
-        print(f'Current learning rate: {learning_rate}')
-    # Save the entire model after 10,000 epochs
-    if (epoch+1)  % 100000==0:
-        example =x_train[0]
-        traced_model = torch.jit.trace(model, example)
-    # Save the traced model
-        torch.jit.save(traced_model, "dccNN.pth")
-        print('Entire model saved after 10000 epochs.')
+        # Backward pass: Compute gradient of the loss with respect to model parameters
+        loss.backward()
+    
+        # Perform a single optimization step (parameter update)
+        optimizer.step()
+    print(loss.item())
+    X, y = get_new_data()  # Load your initial dataset
+    train_dataset = TensorDataset(X, y)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-# Note: The saved model can be loaded with `torch.load('dense_nn_model_complete.pth')`.
-# Remember that when loading the model in this way, you do not need to define the model class first.
-# However, this approach requires that the code be run where PyTorch is installed.
-
-# Adjust learning rate, the architecture (e.g., number of neurons in hidden layers), or other parameters as needed.
+example =data[0]
+traced_model = torch.jit.trace(model, example)
+torch.jit.save(traced_model, "dccNN.pth")
+print('Entire model saved after 10 epochs.')   
