@@ -182,7 +182,7 @@ def logkernelcal(data):
         
         while abs(h * np.log(a / b)) > 0.0015 and time.time() - start_time < 180:
             B = 0
-            for i in range(int(12 * ((3.6)**j))):
+            for i in range(int(10 * ((3.6)**j))):
                 # Compute the y_values and expanded tensor outside the innermost loop if possible
                 y_values = torch.linspace(i / (3**j), (i + 1) / (3**j), precision, dtype=input_tensor.dtype, device=input_tensor.device)
                 expanded = input_tensor.repeat(precision, 1)
