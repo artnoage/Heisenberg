@@ -1,7 +1,8 @@
 import torch
-from scipy.optimize import newton
 import numpy as np
+import math
 import time
+
 def spherical_to_cartesian(spherical_coords):
     """
     Convert spherical coordinates to Cartesian coordinates for higher-dimensional tensors.
@@ -137,7 +138,7 @@ def d_ccNN(input1,input2):
     operated=op(-input2,input1)
     return norm_ccNN(operated)
 
-def Kernel_unintegrated(input_tensor):
+def kernel_unintegrated(input_tensor):
     # Assuming the last dimension of the input_tensor is 4, in the order: h, R, t, y
     h = input_tensor[..., 0]  # Extracts h
     rsquare = input_tensor[..., 1]    # Extracts R^2=\xi^2+\eta^2
@@ -151,38 +152,68 @@ def Kernel_unintegrated(input_tensor):
     part4a = torch.where(y == 0, torch.tensor(1.0), (2 * y)/torch.tanh(2 * y))
     part4b  = -(rsquare / (4 * h)) * (part4a)
     part4 =    torch.exp(part4b)
-    result = part2 * part3 * part4
+    result = part1*part2 * part3 * part4
     return result
 
 
-def Kernel(input_tensor,precision=int(10**8)):
-    h = input_tensor[..., 0]
-    part1  = (1 / (4 * torch.pi * h)) ** 2
+def kernel(input_tensor):
     original_tuples_expanded=input_tensor.unsqueeze(1)
-    B=0
-    for i in range(1000):
-        y_values = torch.linspace(i/100,(i+1)/100, precision,dtype=input_tensor.dtype, device=input_tensor.device)
-        new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
-        combined_tensor = torch.cat((original_tuples_expanded.expand(-1, precision, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
-        A=part1*Kernel_unintegrated(combined_tensor)
-        A=torch.mean(A,dim=1)
-        B=B+A/100
-        print(i)
-    B= 2*B   
-    return B
+    y_values = torch.linspace(0,15, 15*10**6,dtype=input_tensor.dtype, device=input_tensor.device)
+    new_points_expanded = y_values.unsqueeze(0).unsqueeze(2)
+    combined_tensor = torch.cat((original_tuples_expanded.expand(-1, 15*10**6, -1), new_points_expanded.expand(input_tensor.shape[0], -1, -1)), dim=2)
+    A=kernel_unintegrated(combined_tensor)
+    A=2*torch.sum(A,dim=1)/10**6      
+    return A
 
-def kernel(data,timestep):
-    timetensor=timestep*torch.ones([data.shape[0],1],device=data.device,dtype=data.dtype)
-    x=data[...,0]
-    y=data[...,1]
-    r=(x**2+y**2).unsqueeze(-1)
-    t=data[...,2].unsqueeze(-1)
-    data=torch.cat([timetensor,r,t],dim=1)
-    #kernel_model = torch.jit.load('NN/KernelNN.pth',map_location=data.device).to(data.dtype)
-    #prediction = kernel_model(data).flatten()
+def logkernelcal(data):
+    precision = 10**6
+    ret = torch.zeros(len(data), dtype=data.dtype, device=data.device)
     
-    prediction=Kernel(data)
-    return prediction
+    exp_a_initial = np.exp(20)
+    exp_b_initial = np.exp(15)
+    
+    for element_idx, input_tensor in enumerate(data):
+        start_time = time.time()
+        
+        a = exp_a_initial
+        b = exp_b_initial
+        j = 1
+        h = input_tensor[0].item()
+        
+        while abs(h * np.log(a / b)) > 0.0015 and time.time() - start_time < 180:
+            B = 0
+            for i in range(int(12 * ((3.6)**j))):
+                # Compute the y_values and expanded tensor outside the innermost loop if possible
+                y_values = torch.linspace(i / (3**j), (i + 1) / (3**j), precision, dtype=input_tensor.dtype, device=input_tensor.device)
+                expanded = input_tensor.repeat(precision, 1)
+                
+                # Assuming kernel_unintegrated can process batches, call it once per iteration
+                combined_tensor = torch.cat((expanded, y_values.unsqueeze(1)), dim=1)
+                A = kernel_unintegrated(combined_tensor)
+                A_mean = torch.mean(A)
+                B += A_mean.item() / (3**j)
+            
+            B = (2 * B)
+            a = b
+            b = B
+            j += 1
+            
+            if b <=0 :
+                a = exp_a_initial
+                b = exp_b_initial
+                
+        elapsed_time = time.time() - start_time
+        if (math.isnan(B) or elapsed_time > 180) and abs(h * np.log(a / b)) > 0.0015:
+            ret[element_idx] = 0
+            print("Time ran out")
+        else:
+            trials = max(j - 2, 1)
+            ret[element_idx] = -4 * h * np.log(B)
+            if trials>1:
+                print(f"I finished return after {trials} trials, we get", -4 * h * np.log(B))
+    
+    return ret.unsqueeze(1)
+
     
 
 
